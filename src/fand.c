@@ -17,7 +17,7 @@
  */
 
 /************************************************************************//**
- * @ingroup fand
+ * @ingroup ops-fand
  *
  * @file
  * Source file for the platform fan daemon
@@ -66,9 +66,9 @@
 
 #define MSEC_PER_SEC        1000
 
-#define NAME_IN_DAEMON_TABLE "fand"
+#define NAME_IN_DAEMON_TABLE "ops-fand"
 
-VLOG_DEFINE_THIS_MODULE(fand);
+VLOG_DEFINE_THIS_MODULE(ops-fand);
 
 COVERAGE_DEFINE(fand_reconfigure);
 
@@ -399,7 +399,7 @@ fand_init(const char *remote)
 
     /* OPS_TODO: add temperature sensors status */
 
-    unixctl_command_register("fand/dump", "", 0, 0,
+    unixctl_command_register("ops-fand/dump", "", 0, 0,
                              fand_unixctl_dump, NULL);
 }
 

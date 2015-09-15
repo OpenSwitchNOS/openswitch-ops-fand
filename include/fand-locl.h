@@ -16,7 +16,7 @@
  */
 
 /************************************************************************//**
- * @defgroup fand Fan Daemon
+ * @defgroup ops-fand Fan Daemon
  * This module is the platform daemon that processess and manages fan FRUs
  * for all subsystems in the switch that have fans.
  *
@@ -36,7 +36,7 @@
  *
  * Command line options:
  *
- *     usage: fand [OPTIONS] [DATABASE]
+ *     usage: ops-fand [OPTIONS] [DATABASE]
  *     where DATABASE is a socket on which ovsdb-server is listening
  *           (default: "unix:/var/run/openvswitch/db.sock").
  *
@@ -53,14 +53,14 @@
  *     Daemon options:
  *          --detach                run in background as daemon
  *          --no-chdir              do not chdir to '/'
- *          --pidfile[=FILE]        create pidfile (default: /var/run/openvswitch/fand.pid)
+ *          --pidfile[=FILE]        create pidfile (default: /var/run/openvswitch/ops-fand.pid)
  *          --overwrite-pidfile     with --pidfile, start even if already running
  *
  *     Logging options:
  *          -vSPEC, --verbose=SPEC   set logging levels
  *          -v, --verbose            set maximum verbosity level
  *          --log-file[=FILE]        enable logging to specified FILE
- *                                  (default: /var/log/openvswitch/fand.log)
+ *                                  (default: /var/log/openvswitch/ops-fand.log)
  *          --syslog-target=HOST:PORT  also send syslog msgs to HOST:PORT via UDP
  *
  *     Other options:
@@ -71,12 +71,12 @@
  *
  * ovs-apptcl options:
  *
- *      Support dump: ovs-appctl -t fand fand/dump
+ *      Support dump: ovs-appctl -t ops-fand ops-fand/dump
  *
  *
  * OVSDB elements usage
  *
- *     Creation: The following rows/cols are created by fand
+ *     Creation: The following rows/cols are created by ops-fand
  *               rows in Fan table
  *               Fan:name
  *               Fan:speed
@@ -84,12 +84,12 @@
  *               Fan:rpm
  *               Fan:status
  *
- *     Written: The following cols are written by fand
+ *     Written: The following cols are written by ops-fand
  *              Fan:speed
  *              Fan:direction
  *              Fan:rpm
  *              Fan:status
- *              daemon["fand"]:cur_hw
+ *              daemon["ops-fand"]:cur_hw
  *              subsystem:fans
  *
  *     Read: The following cols are read by ledd
@@ -100,9 +100,9 @@
  *
  * Linux Files:
  *
- *     The following files are written by fand
- *           /var/run/openvswitch/fand.pid: Process ID for the fand daemon
- *           /var/run/openvswitch/fand.<pid>.ctl: unixctl socket for the fand daemon
+ *     The following files are written by ops-fand
+ *           /var/run/openvswitch/ops-fand.pid: Process ID for the ops-fand daemon
+ *           /var/run/openvswitch/ops-fand.<pid>.ctl: unixctl socket for the ops-fand daemon
  *
  *
  * @}

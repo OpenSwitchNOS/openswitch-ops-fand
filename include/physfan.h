@@ -16,7 +16,7 @@
  */
 
 /************************************************************************//**
- * @ingroup fand
+ * @ingroup ops-fand
  *
  * @file
  * Header file for set fan speed functions.

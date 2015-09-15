@@ -15,7 +15,7 @@
 
 cmake_minimum_required (VERSION 2.8)
 
-set (FAND fand)
+set (FAND ops-fand)
 project (${FAND})
 set (SRC_DIR src)
 set (INCL_DIR include)
@@ -32,17 +32,17 @@ include_directories (${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR}/${INCL_DIR}
                      ${OVSCOMMON_INCLUDE_DIRS}
 )
 
-# Source files to build fand
+# Source files to build ops-fand
 set (SOURCES ${SRC_DIR}/fand.c ${SRC_DIR}/physfan.c ${SRC_DIR}/fanspeed.c
              ${SRC_DIR}/fanstatus.c ${SRC_DIR}/fandirection.c)
 
-# Rules to build fand
+# Rules to build ops-fand
 add_executable (${FAND} ${SOURCES})
 
 target_link_libraries (${FAND} ${CONFIG_YAML_LIBRARIES}
                        ${OVSCOMMON_LIBRARIES} ${OVSDB_LIBRARIES}
                        -lpthread -lrt)
 
-# Rules to install fand binary in rootfs
+# Rules to install ops-fand binary in rootfs
 install(TARGETS ${FAND}
         RUNTIME DESTINATION bin)

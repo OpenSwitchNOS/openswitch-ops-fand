@@ -16,7 +16,7 @@
  */
 
 /************************************************************************//**
- * @ingroup fand
+ * @ingroup ops-fand
  *
  * @file
  * Header file for fan speed functions.
@@ -27,7 +27,7 @@
 
 /* enums for fan speed settings
    this is the override value, with -1 meaning that no
-   override has been specified, and that fand should control
+   override has been specified, and that ops-fand should control
    fan speed based on thermal sensor status in the subsystem */
 enum fanspeed
 {
