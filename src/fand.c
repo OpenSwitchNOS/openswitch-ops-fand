@@ -637,6 +637,7 @@ main(int argc, char *argv[])
     bool exiting;
     int retval;
 
+    $ printf("TEsting changes in FAND!!!\n");
     set_program_name(argv[0]);
 
     proctitle_init(argc, argv);
