@@ -42,6 +42,7 @@ include_directories (${INCL_DIR}
 
 # CLI libraries source files
 set (SOURCES_CLI ${PROJECT_SOURCE_DIR}/fan_vty.c
+                 ${PROJECT_SOURCE_DIR}/vtysh_ovsdb_fan_context.c
     )
 
 
