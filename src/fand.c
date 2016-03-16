@@ -29,6 +29,10 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
+#include <event2/event.h>
+#include <event2/bufferevent.h>
+#include <event2/buffer.h>
+#include <event2/event_struct.h>
 
 #include "config.h"
 #include "command-line.h"
@@ -58,6 +62,7 @@
 #include "fanstatus.h"
 #include "physfan.h"
 #include "fand-locl.h"
+#include "eventlog.h"
 
 #define FAN_POLL_INTERVAL   5    /* OPS_TODO: should this be configurable? */
                                  /*             or should it be vendor spec? */
@@ -349,6 +354,8 @@ fand_remove_unmarked_subsystems(void)
 static void
 fand_init(const char *remote)
 {
+    int retval;
+
     /* initialize subsystems */
     init_subsystems();
 
@@ -400,6 +407,15 @@ fand_init(const char *remote)
 
     unixctl_command_register("ops-fand/dump", "", 0, 0,
                              fand_unixctl_dump, NULL);
+
+    retval = event_log_init("FAN");
+    if(retval < 0) {
+         VLOG_ERR("Event log initialization failed for FAN");
+    } else {
+         VLOG_ERR("Event log initialization passed for FAN");
+         log_event("FAN_EVENT", EV_KV("value", "test from Ganesh"));
+    }
+
 }
 
 static void
@@ -655,6 +671,14 @@ main(int argc, char *argv[])
 
     fand_init(remote);
     free(remote);
+
+VLOG_DBG("Adding new test123 FAN");
+VLOG_ERR("Adding new test123 FAN 2");
+log_event("FAN_EVENT", NULL);
+log_event("FAN_EVENT", NULL);
+log_event("FAN_EVENT", NULL);
+
+
 
     exiting = false;
     while (!exiting) {
