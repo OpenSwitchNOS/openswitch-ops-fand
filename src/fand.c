@@ -58,6 +58,7 @@
 #include "fanstatus.h"
 #include "physfan.h"
 #include "fand-locl.h"
+#include "eventlog.h"
 
 #define FAN_POLL_INTERVAL   5    /* OPS_TODO: should this be configurable? */
                                  /*             or should it be vendor spec? */
@@ -221,6 +222,9 @@ add_subsystem(const struct ovsrec_subsystem *ovsrec_subsys)
     txn = ovsdb_idl_txn_create(idl);
 
     VLOG_DBG("There are %d total fans in subsystem %s", total_fans, ovsrec_subsys->name);
+    log_event("FAN_COUNT", EV_KV("count", "%d", total_fans),
+        EV_KV("subsystem", "%s", ovsrec_subsys->name ));
+
     /* TODO walk through fans and add them to DB */
     for (idx = 0; idx < fan_fru_count; idx++) {
         const YamlFanFru *fan_fru = yaml_get_fan_fru(yaml_handle, ovsrec_subsys->name, idx);
@@ -349,6 +353,8 @@ fand_remove_unmarked_subsystems(void)
 static void
 fand_init(const char *remote)
 {
+    int retval = 0;
+
     /* initialize subsystems */
     init_subsystems();
 
@@ -400,6 +406,11 @@ fand_init(const char *remote)
 
     unixctl_command_register("ops-fand/dump", "", 0, 0,
                              fand_unixctl_dump, NULL);
+
+    retval = event_log_init("FAN");
+    if(retval < 0) {
+         VLOG_ERR("Event log initialization failed for FAN");
+    }
 }
 
 static void

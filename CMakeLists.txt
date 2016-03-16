@@ -40,7 +40,7 @@ add_executable (${FAND} ${SOURCES})
 
 target_link_libraries (${FAND} ${CONFIG_YAML_LIBRARIES}
                        ${OVSCOMMON_LIBRARIES} ${OVSDB_LIBRARIES}
-                       -lpthread -lrt)
+                       -lpthread -lrt -lsupportability)
 
 # Build ops-ledd cli shared libraries.
 add_subdirectory(src/cli)
