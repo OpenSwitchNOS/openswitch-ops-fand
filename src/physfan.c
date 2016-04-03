@@ -104,7 +104,7 @@ fand_set_fanspeed(struct locl_subsystem *subsystem)
                 subsystem->name,
                 hw_speed_val);
             log_event("FAN_SPEED", EV_KV("subsystem", "%s", subsystem->name),
-                EV_KV("speed", "%s", "NORMAL"),
+                EV_KV("speedval", "%s", "NORMAL"),
                 EV_KV("value", "0x%x", hw_speed_val));
             break;
         case FAND_SPEED_SLOW:
@@ -113,7 +113,7 @@ fand_set_fanspeed(struct locl_subsystem *subsystem)
                 subsystem->name,
                 hw_speed_val);
             log_event("FAN_SPEED", EV_KV("subsystem", "%s", subsystem->name),
-                EV_KV("speed", "%s", "SLOW"),
+                EV_KV("speedval", "%s", "SLOW"),
                 EV_KV("value", "0x%x", hw_speed_val));
             break;
         case FAND_SPEED_MEDIUM:
@@ -122,7 +122,7 @@ fand_set_fanspeed(struct locl_subsystem *subsystem)
                 subsystem->name,
                 hw_speed_val);
             log_event("FAN_SPEED", EV_KV("subsystem", "%s", subsystem->name),
-                EV_KV("speed", "%s", "MEDIUM"),
+                EV_KV("speedval", "%s", "MEDIUM"),
                 EV_KV("value", "0x%x", hw_speed_val));
             break;
         case FAND_SPEED_FAST:
@@ -131,7 +131,7 @@ fand_set_fanspeed(struct locl_subsystem *subsystem)
                 subsystem->name,
                 hw_speed_val);
             log_event("FAN_SPEED", EV_KV("subsystem", "%s", subsystem->name),
-                EV_KV("speed", "%s", "FAST"),
+                EV_KV("speedval", "%s", "FAST"),
                 EV_KV("value", "0x%x", hw_speed_val));
             break;
         case FAND_SPEED_MAX:
@@ -140,7 +140,7 @@ fand_set_fanspeed(struct locl_subsystem *subsystem)
                 subsystem->name,
                 hw_speed_val);
             log_event("FAN_SPEED", EV_KV("subsystem", "%s", subsystem->name),
-                EV_KV("speed", "%s", "MAX"),
+                EV_KV("speedval", "%s", "MAX"),
                 EV_KV("value", "0x%x", hw_speed_val));
             break;
     }
@@ -453,22 +453,18 @@ fand_read_fan_fru_direction(
         case 1:
         default:
             VLOG_DBG("direction data is %02x", byte);
-            log_event("FAN_DIRECTION", EV_KV("value", "%02x", byte));
             value = (byte & (direction_op->bit_mask));
             break;
         case 2:
             VLOG_DBG("direction data is %04x", word);
-            log_event("FAN_DIRECTION", EV_KV("value", "%04x", byte));
             value = (word & (direction_op->bit_mask));
             break;
         case 4:
             VLOG_DBG("direction data is %08lx", dword);
-            log_event("FAN_DIRECTION", EV_KV("value", "%08lx", byte));
             value = (dword & (direction_op->bit_mask));
             break;
     }
     VLOG_DBG("direction is %08x (%08x)", value, direction_op->bit_mask);
-    log_event("FAN_DIRECTION", EV_KV("value", "%08x", value));
 
     /* OPS_TODO: code assumption: the value is a single bit that indicates
        direction as either front-to-back or back-to-front. It would be better
