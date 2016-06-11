@@ -88,13 +88,6 @@ fand_set_fanspeed(struct locl_subsystem *subsystem)
         return;
     }
 
-    reg_op = fan_info->fan_speed_control;
-
-    if (reg_op == NULL) {
-        VLOG_DBG("subsystem %s has no fan speed control", subsystem->name);
-        return;
-    }
-
     /* translate the speed */
     switch (speed) {
         case FAND_SPEED_NORMAL:
@@ -145,88 +138,199 @@ fand_set_fanspeed(struct locl_subsystem *subsystem)
             break;
     }
 
-    /* get the device */
-    device = yaml_find_device(yaml_handle, subsystem->name, reg_op->device);
+    if (fan_info->fan_speed_control_type == SINGLE)
+    {
+          reg_op = fan_info->fan_speed_control;
 
-    if (device == NULL) {
-        VLOG_WARN("subsystem %s: unable to find fan speed control device %s",
-                subsystem->name,
-                reg_op->device);
-        return;
+          if (reg_op == NULL) {
+              VLOG_DBG("subsystem %s has no fan speed control", subsystem->name);
+              return;
+          }
+
+          /* get the device */
+          device = yaml_find_device(yaml_handle, subsystem->name, reg_op->device);
+
+          if (device == NULL) {
+              VLOG_WARN("subsystem %s: unable to find fan speed control device %s",
+                      subsystem->name,
+                      reg_op->device);
+              return;
+          }
+
+          VLOG_DBG("subsystem %s: executing read operation to device %s",
+              subsystem->name,
+              reg_op->device);
+          /* we're going to do a read/modify/write: read the data */
+          op.direction = READ;
+          op.device = reg_op->device;
+          op.register_address = reg_op->register_address;
+          op.byte_count = reg_op->register_size;
+          switch (reg_op->register_size) {
+              case 1:
+                  op.data = (unsigned char *)&byte;
+                  break;
+              case 2:
+                  op.data = (unsigned char *)&word;
+                  break;
+              case 4:
+                  op.data = (unsigned char *)&dword;
+                  break;
+              default:
+                  VLOG_WARN("subsystem %s: invalid fan speed control register size (%d)",
+                      subsystem->name,
+                      reg_op->register_size);
+                  return;
+          }
+          op.set_register = false;
+          op.negative_polarity = false;
+          cmds[0] = &op;
+          cmds[1] = NULL;
+
+          i2c_debug(subsystem->name, device, cmds);
+          rc = i2c_execute(yaml_handle, subsystem->name, device, cmds);
+
+          if (rc != 0) {
+              VLOG_WARN("subsystem %s: unable to read fan speed control register (%d)",
+                  subsystem->name,
+                  rc);
+              return;
+          }
+
+          VLOG_DBG("subsystem %s: executing write operation to device %s",
+              subsystem->name,
+              reg_op->device);
+          /* now we write the data */
+          op.direction = WRITE;
+          switch (reg_op->register_size) {
+              case 1:
+                  byte &= ~reg_op->bit_mask;
+                  byte |= hw_speed_val;
+                  break;
+              case 2:
+                  word &= ~reg_op->bit_mask;
+                  word |= hw_speed_val;
+                  break;
+              case 4:
+                  dword &= ~reg_op->bit_mask;
+                  dword |= hw_speed_val;
+                  break;
+              default:
+                  VLOG_WARN("subsystem %s: invalid fan speed control register size (%d)",
+                      subsystem->name,
+                      reg_op->register_size);
+                  return;
+          }
+
+          i2c_debug(subsystem->name, device, cmds);
+          rc = i2c_execute(yaml_handle, subsystem->name, device, cmds);
+
+          if (rc != 0) {
+              VLOG_WARN("subsystem %s: unable to set fan speed control register (%d)",
+                  subsystem->name,
+                  rc);
+              return;
+          }
     }
+    else
+    {
+      for (int idx = 0; idx < fan_info->number_fan_frus; idx++)
+      {
+        const YamlFanFru *fan_fru = yaml_get_fan_fru(yaml_handle, subsystem->name, idx);
+        for (int fan_idx = 0; fan_fru->fans[fan_idx] != NULL; fan_idx++)
+        {
+          const YamlFan *fan = fan_fru->fans[fan_idx];
+          reg_op = fan->fan_speed_pwm;
 
-    VLOG_DBG("subsystem %s: executing read operation to device %s",
-        subsystem->name,
-        reg_op->device);
-    /* we're going to do a read/modify/write: read the data */
-    op.direction = READ;
-    op.device = reg_op->device;
-    op.register_address = reg_op->register_address;
-    op.byte_count = reg_op->register_size;
-    switch (reg_op->register_size) {
-        case 1:
-            op.data = (unsigned char *)&byte;
-            break;
-        case 2:
-            op.data = (unsigned char *)&word;
-            break;
-        case 4:
-            op.data = (unsigned char *)&dword;
-            break;
-        default:
-            VLOG_WARN("subsystem %s: invalid fan speed control register size (%d)",
-                subsystem->name,
-                reg_op->register_size);
-            return;
-    }
-    op.set_register = false;
-    op.negative_polarity = false;
-    cmds[0] = &op;
-    cmds[1] = NULL;
+          if (reg_op == NULL) {
+              VLOG_DBG("subsystem %s has no fan speed control", subsystem->name);
+              return;
+          }
 
-    i2c_debug(subsystem->name, device, cmds);
-    rc = i2c_execute(yaml_handle, subsystem->name, device, cmds);
+          /* get the device */
+          device = yaml_find_device(yaml_handle, subsystem->name, reg_op->device);
 
-    if (rc != 0) {
-        VLOG_WARN("subsystem %s: unable to read fan speed control register (%d)",
-            subsystem->name,
-            rc);
-        return;
-    }
+          if (device == NULL) {
+              VLOG_WARN("subsystem %s: unable to find fan speed control device %s",
+                      subsystem->name,
+                      reg_op->device);
+              return;
+          }
 
-    VLOG_DBG("subsystem %s: executing write operation to device %s",
-        subsystem->name,
-        reg_op->device);
-    /* now we write the data */
-    op.direction = WRITE;
-    switch (reg_op->register_size) {
-        case 1:
-            byte &= ~reg_op->bit_mask;
-            byte |= hw_speed_val;
-            break;
-        case 2:
-            word &= ~reg_op->bit_mask;
-            word |= hw_speed_val;
-            break;
-        case 4:
-            dword &= ~reg_op->bit_mask;
-            dword |= hw_speed_val;
-            break;
-        default:
-            VLOG_WARN("subsystem %s: invalid fan speed control register size (%d)",
-                subsystem->name,
-                reg_op->register_size);
-            return;
-    }
+          VLOG_DBG("subsystem %s: executing read operation to device %s",
+              subsystem->name,
+              reg_op->device);
+          /* we're going to do a read/modify/write: read the data */
+          op.direction = READ;
+          op.device = reg_op->device;
+          op.register_address = reg_op->register_address;
+          op.byte_count = reg_op->register_size;
+          switch (reg_op->register_size) {
+              case 1:
+                  op.data = (unsigned char *)&byte;
+                  break;
+              case 2:
+                  op.data = (unsigned char *)&word;
+                  break;
+              case 4:
+                  op.data = (unsigned char *)&dword;
+                  break;
+              default:
+                  VLOG_WARN("subsystem %s: invalid fan speed control register size (%d)",
+                      subsystem->name,
+                      reg_op->register_size);
+                  return;
+          }
+          op.set_register = false;
+          op.negative_polarity = false;
+          cmds[0] = &op;
+          cmds[1] = NULL;
 
-    i2c_debug(subsystem->name, device, cmds);
-    rc = i2c_execute(yaml_handle, subsystem->name, device, cmds);
+          i2c_debug(subsystem->name, device, cmds);
+          rc = i2c_execute(yaml_handle, subsystem->name, device, cmds);
 
-    if (rc != 0) {
-        VLOG_WARN("subsystem %s: unable to set fan speed control register (%d)",
-            subsystem->name,
-            rc);
-        return;
+          if (rc != 0) {
+              VLOG_WARN("subsystem %s: unable to read fan speed control register (%d)",
+                  subsystem->name,
+                  rc);
+              return;
+          }
+
+          VLOG_DBG("subsystem %s: executing write operation to device %s",
+              subsystem->name,
+              reg_op->device);
+          /* now we write the data */
+          op.direction = WRITE;
+          switch (reg_op->register_size) {
+              case 1:
+                  byte &= ~reg_op->bit_mask;
+                  byte |= hw_speed_val;
+                  break;
+              case 2:
+                  word &= ~reg_op->bit_mask;
+                  word |= hw_speed_val;
+                  break;
+              case 4:
+                  dword &= ~reg_op->bit_mask;
+                  dword |= hw_speed_val;
+                  break;
+              default:
+                  VLOG_WARN("subsystem %s: invalid fan speed control register size (%d)",
+                      subsystem->name,
+                      reg_op->register_size);
+                  return;
+          }
+
+          i2c_debug(subsystem->name, device, cmds);
+          rc = i2c_execute(yaml_handle, subsystem->name, device, cmds);
+
+          if (rc != 0) {
+              VLOG_WARN("subsystem %s: unable to set fan speed control register (%d)",
+                  subsystem->name,
+                  rc);
+              return;
+          }
+        }
+      }
     }
 }
 
@@ -536,8 +640,18 @@ fand_read_direction(const char *subsystem_name, const YamlFan *fan)
 void
 fand_read_fan_status(struct locl_fan *fan)
 {
+    const YamlFanInfo *fan_info = NULL;
+    fan_info = yaml_get_fan_info(yaml_handle, fan->subsystem->name);
+
     fan->rpm = fand_read_rpm(fan->subsystem->name, fan->yaml_fan);
-    fan->rpm *= fan->subsystem->multiplier;
+    if (fan_info->fan_speed_control_type == SINGLE)
+    {
+        fan->rpm = fan->subsystem->multiplier * fan->rpm;
+    }
+    else
+    {
+        fan->rpm = fan->subsystem->multiplier / fan->rpm / 16;
+    }
 
     fan->status = fand_read_status(fan->subsystem->name, fan->yaml_fan);
     fan->direction = fand_read_direction(fan->subsystem->name, fan->yaml_fan);
