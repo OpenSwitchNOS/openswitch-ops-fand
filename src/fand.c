@@ -76,6 +76,10 @@ static struct ovsdb_idl *idl;
 
 static unsigned int idl_seqno;
 
+static unsigned int fand_seqno;
+
+static unsigned int fand_saved_seqno;
+
 static unixctl_cb_func fand_unixctl_dump;
 
 static bool cur_hw_set = false;
@@ -193,6 +197,7 @@ add_subsystem(const struct ovsrec_subsystem *ovsrec_subsys)
     }
 
     result->multiplier = fan_info->fan_speed_multiplier;
+    result->numerator  = fan_info->fan_speed_numerator;
 
     /* count the total fans in the subsystem */
     total_fans = 0;
@@ -455,15 +460,18 @@ fand_read_status(struct ovsdb_idl *idl)
         if (strcmp(db_fan->status, status) != 0) {
             ovsrec_fan_set_status(db_fan, status);
             change = true;
+            fand_seqno++;
         }
         const char *speed = fan_speed_enum_to_string(fan->speed);
         if (strcmp(db_fan->speed, speed) != 0) {
             ovsrec_fan_set_speed(db_fan, speed);
             change = true;
+            fand_seqno++;
         }
         if (strcmp(db_fan->direction, fan->direction) != 0) {
             ovsrec_fan_set_direction(db_fan, fan->direction);
             change = true;
+            fand_seqno++;
         }
         if (db_fan->rpm == NULL || db_fan->rpm[0] != fan->rpm) {
             rpm[0] = fan->rpm;
@@ -505,11 +513,12 @@ fand_reconfigure(struct ovsdb_idl *idl)
 
     COVERAGE_INC(fand_reconfigure);
 
-    if (new_idl_seqno == idl_seqno){
+    if ((new_idl_seqno == idl_seqno) && (fand_saved_seqno == fand_seqno)) {
         return;
     }
 
     idl_seqno = new_idl_seqno;
+    fand_saved_seqno = fand_seqno;
 
     fand_unmark_subsystems();
 
@@ -547,6 +556,7 @@ fand_reconfigure(struct ovsdb_idl *idl)
         }
 
         fand_set_fanspeed(subsystem);
+        fand_set_fanleds(subsystem);
 
         /* "mark" the subsystem, to indicate that it is still present */
         subsystem->marked = true;

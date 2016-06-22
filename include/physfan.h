@@ -26,4 +26,6 @@
 
 void fand_set_fanspeed(struct locl_subsystem *subsystem);
 
+void fand_set_fanleds(struct locl_subsystem *subsystem);
+
 void fand_read_fan_status(struct locl_fan *fan);

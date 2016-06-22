@@ -72,6 +72,7 @@ Main loop pseudo-code
         update status
         set fan direction
         set fan speed
+        set fan leds
   check for appctl
   wait for IDL or appctl input
 ```

@@ -127,6 +127,7 @@ struct locl_subsystem {
     enum fanspeed fan_speed_override; /* as configured by user */
     enum fanspeed speed;          /* result of fan_speed, fan_speed_override */
     int multiplier;               /* from fans.yaml info */
+    int numerator;                /* from fans.yaml info */
     struct shash subsystem_fans;  /* struct locl_fan */
 };
 
