@@ -1,0 +1,39 @@
+#ifndef _FAND_PLUGINS_H_
+#define _FAND_PLUGINS_H_
+
+#define PLATFORM_PLUGINS_PATH "@LIBDIR@/platform/plugins"
+
+/**
+ * Initialize ops-fand platform support plugin. Must be implemented in plugin.
+ */
+void fand_plugin_init(void);
+
+/**
+ * Deinitialize ops-fand platform support plugin. Must be implemented in
+ * plugin.
+ */
+void fand_plugin_deinit(void);
+
+/**
+ * Get fand subsystem class.
+ */
+const struct fand_subsystem_class *fand_subsystem_class_get(void);
+
+/**
+ * Get fand fan class.
+ */
+const struct fand_fan_class *fand_fan_class_get(void);
+
+/**
+ * Loads platform plugin. Initializes callbacks from plugin.
+ *
+ * @return 0 on success, non-zero value on failure.
+ */
+int fand_plugin_load(void);
+
+/**
+ * Unload plugin - deinitialize symbols by destroing handle.
+ */
+void fand_plugin_unload(void);
+
+#endif /* _FAND_PLUGINS_H_ */

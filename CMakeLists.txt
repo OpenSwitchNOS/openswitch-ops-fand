@@ -21,9 +21,12 @@ set (INCL_DIR include)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99 -Wall -Werror")
 
+# Temporary hardcodes to compile without changes in ops-build
+set (LIBDIR usr/lib)
+set (FAND_PLUGIN_NAME yaml-i2c)
+
 # Rules to locate needed libraries
 include(FindPkgConfig)
-pkg_check_modules(CONFIG_YAML REQUIRED ops-config-yaml)
 pkg_check_modules(OVSCOMMON REQUIRED libovscommon)
 pkg_check_modules(OVSDB REQUIRED libovsdb)
 
@@ -31,19 +34,23 @@ include_directories (${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR}/${INCL_DIR}
                      ${OVSCOMMON_INCLUDE_DIRS}
 )
 
+configure_file(${CMAKE_SOURCE_DIR}/${INCL_DIR}/fand_plugins.h.in
+               ${CMAKE_SOURCE_DIR}/${INCL_DIR}/fand_plugins.h)
+
 # Source files to build ops-fand
-set (SOURCES ${SRC_DIR}/fand.c ${SRC_DIR}/physfan.c ${SRC_DIR}/fanspeed.c
+set (SOURCES ${SRC_DIR}/fand.c ${SRC_DIR}/fand_plugins.c ${SRC_DIR}/fanspeed.c
              ${SRC_DIR}/fanstatus.c ${SRC_DIR}/fandirection.c)
 
 # Rules to build ops-fand
 add_executable (${FAND} ${SOURCES})
 
-target_link_libraries (${FAND} ${CONFIG_YAML_LIBRARIES}
+target_link_libraries (${FAND}
                        ${OVSCOMMON_LIBRARIES} ${OVSDB_LIBRARIES}
                        -lpthread -lrt -lsupportability)
 
 # Build ops-ledd cli shared libraries.
 add_subdirectory(src/cli)
+add_subdirectory(plugins/${FAND_PLUGIN_NAME})
 
 # Rules to install ops-fand binary in rootfs
 install(TARGETS ${FAND}
