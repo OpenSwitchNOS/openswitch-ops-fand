@@ -51,14 +51,14 @@
 #include "openvswitch/vlog.h"
 #include "vswitch-idl.h"
 #include "coverage.h"
-
-#include "config-yaml.h"
+#include "sset.h"
 
 #include "fanspeed.h"
 #include "fanstatus.h"
 #include "physfan.h"
 #include "fand-locl.h"
 #include "eventlog.h"
+#include "fand_plugins.h"
 
 #define FAN_POLL_INTERVAL   5    /* OPS_TODO: should this be configurable? */
                                  /*             or should it be vendor spec? */
@@ -85,9 +85,6 @@ struct shash subsystem_data;
 /* define a shash (string hash) to hold the fans (by name) */
 struct shash fan_data;
 
-/* global yaml config handle */
-YamlConfigHandle yaml_handle;
-
 /* initialize the subsystem data (and the fan data) dictionaries */
 static void
 init_subsystems(void)
@@ -110,33 +107,48 @@ lookup_fan(const char *name)
     return(NULL);
 }
 
-/* create a new subsystem structure and add all the dependent ports
-   as a side-effect, create all fans in the database */
 static struct locl_subsystem *
 add_subsystem(const struct ovsrec_subsystem *ovsrec_subsys)
 {
     struct locl_subsystem *result;
     int rc;
     int total_fans;
-    unsigned int idx;
     struct ovsdb_idl_txn *txn;
     struct ovsrec_fan **fan_array;
     int total_fan_idx;
-    unsigned int fan_fru_count;
-    const char *dir;
-    int fan_idx;
-    const YamlFanInfo *fan_info;
     const char *override;
+    const char *fan_dev_name = NULL, *next = NULL;
     enum fanspeed override_value = FAND_SPEED_NONE;
+    struct sset fan_set;
+    const struct fand_subsystem_class *subsystem_class = NULL;
+    const struct fand_fan_class *fan_class = NULL;
 
     VLOG_DBG("Adding new subsystem %s", ovsrec_subsys->name);
-    result = (struct locl_subsystem *)malloc(sizeof(struct locl_subsystem));
-    memset(result, 0, sizeof(struct locl_subsystem));
+
+    /* Using hard coded type untill there's support for multiple platforms in
+     * ops-sysd. */
+    subsystem_class = fand_subsystem_class_get(PLATFORM_TYPE_STR);
+    fan_class = fand_fan_class_get(PLATFORM_TYPE_STR);
+
+    if (subsystem_class == NULL) {
+        VLOG_ERR("No plugin provides subsystem class for %s type",
+                 PLATFORM_TYPE_STR);
+        return NULL;
+    }
+
+    if (fan_class == NULL) {
+        VLOG_ERR("No plugin provides fan class for %s type",
+                 PLATFORM_TYPE_STR);
+        return NULL;
+    }
+
+    result = subsystem_class->fand_subsystem_alloc();
     (void)shash_add(&subsystem_data, ovsrec_subsys->name, (void *)result);
     result->name = strdup(ovsrec_subsys->name);
     result->marked = false;
     result->valid = false;
     result->parent_subsystem = NULL;  /* OPS_TODO: find parent subsystem */
+    result->class = subsystem_class;
     shash_init(&result->subsystem_fans);
     override = smap_get(&ovsrec_subsys->other_config, "fan_speed_override");
     if (override != NULL) {
@@ -144,135 +156,91 @@ add_subsystem(const struct ovsrec_subsystem *ovsrec_subsys)
     }
     result->fan_speed_override = override_value;
 
+    rc = subsystem_class->fand_subsystem_construct(result);
+    if (rc) {
+        VLOG_ERR("Failed to construct subsystem %s", result->name);
+        free(result->name);
+        subsystem_class->fand_subsystem_dealloc(result);
+        return(NULL);
+    }
+
     /* OPS_TODO: could check to see if the temp sensors have been populated
        with data and use that for the sensor speed when initializing the
        fan_speed value. */
     result->fan_speed = FAND_SPEED_NORMAL;
 
-    /* use a default if the hw_desc_dir has not been populated */
-    dir = ovsrec_subsys->hw_desc_dir;
-
-    if (dir == NULL || strlen(dir) == 0) {
-        VLOG_ERR("No h/w description directory for subsystem %s",
-                 ovsrec_subsys->name);
-        return(NULL);
-    }
-
-    /* since this is a new subsystem, load all of the hardware description
-       information about devices and fans (just for this subsystem).
-       parse fan and device data for subsystem */
-    rc = yaml_add_subsystem(yaml_handle, ovsrec_subsys->name, dir);
-
-    if (rc != 0) {
-        VLOG_ERR("Error getting h/w description information for subsystem %s",
-                 ovsrec_subsys->name);
-        return(NULL);
-    }
-
-    rc = yaml_parse_devices(yaml_handle, ovsrec_subsys->name);
-
-    if (rc != 0) {
-        VLOG_ERR("Unable to parse subsystem %s devices file (in %s)",
-                 ovsrec_subsys->name, dir);
-        return(NULL);
-    }
-
-    rc = yaml_parse_fans(yaml_handle, ovsrec_subsys->name);
-
-    if (rc != 0) {
-        VLOG_ERR("Unable to parse subsystem %s fan file (in %s)",
-                 ovsrec_subsys->name, dir);
-        return(NULL);
-    }
-
-    fan_info = yaml_get_fan_info(yaml_handle, ovsrec_subsys->name);
-
-    if (fan_info == NULL) {
-        VLOG_INFO("subsystem %s has no fan info", ovsrec_subsys->name);
-        return(NULL);
-    }
-
-    result->multiplier = fan_info->fan_speed_multiplier;
-
     /* count the total fans in the subsystem */
     total_fans = 0;
     total_fan_idx = 0;
 
-    fan_fru_count = yaml_get_fan_fru_count(yaml_handle, ovsrec_subsys->name);
+    sset_init(&fan_set);
+    rc = subsystem_class->fand_enumerate_devices(result, &fan_set);
 
-    VLOG_DBG("There are %d fan FRUS in subsystem %s", fan_fru_count, ovsrec_subsys->name);
-
-    if (fan_fru_count <= 0) {
-        return(NULL);
-    }
-
-    result->valid = true;
-
-    for (idx = 0; idx < fan_fru_count; idx++) {
-        const YamlFanFru *fan_fru = yaml_get_fan_fru(yaml_handle, ovsrec_subsys->name, idx);
-        /* each FanFru has one or more fans */
-        for (fan_idx = 0; fan_fru->fans[fan_idx] != NULL; fan_idx++) {
-            ++total_fans;
-        }
-    }
+    total_fans = sset_count(&fan_set);
 
     fan_array = (struct ovsrec_fan **)malloc(total_fans * sizeof(struct ovsrec_fan *));
     memset(fan_array, 0, total_fans * sizeof(struct ovsrec_fan *));
 
     txn = ovsdb_idl_txn_create(idl);
 
-    VLOG_DBG("There are %d total fans in subsystem %s", total_fans, ovsrec_subsys->name);
-    log_event("FAN_COUNT", EV_KV("count", "%d", total_fans),
-        EV_KV("subsystem", "%s", ovsrec_subsys->name ));
-
-    /* TODO walk through fans and add them to DB */
-    for (idx = 0; idx < fan_fru_count; idx++) {
-        const YamlFanFru *fan_fru = yaml_get_fan_fru(yaml_handle, ovsrec_subsys->name, idx);
-
-        /* each FanFru has one or more fans */
-        for (fan_idx = 0; fan_fru->fans[fan_idx] != NULL; fan_idx++) {
-            struct ovsrec_fan *ovs_fan;
-            char *fan_name = NULL;
-            const YamlFan *fan = fan_fru->fans[fan_idx];
-            struct locl_fan *new_fan;
-            VLOG_DBG("Adding fan %s in subsystem %s",
-                fan->name,
+    SSET_FOR_EACH_SAFE(fan_dev_name, next, &fan_set) {
+        char *fan_name = NULL;
+        struct ovsrec_fan *ovs_fan;
+        struct locl_fan *new_fan;
+        VLOG_DBG("Adding fan %s in subsystem %s",
+                fan_dev_name,
                 ovsrec_subsys->name);
 
-            asprintf(&fan_name, "%s-%s", ovsrec_subsys->name, fan->name);
-            new_fan = (struct locl_fan *)malloc(sizeof(struct locl_fan));
-            new_fan->name = fan_name;
-            new_fan->subsystem = result;
-            new_fan->yaml_fan = fan;
-
-            shash_add(&result->subsystem_fans, fan_name, (void *)new_fan);
-            shash_add(&fan_data, fan_name, (void *)new_fan);
-
-            /* look for existing Fan rows */
-            ovs_fan = lookup_fan(fan_name);
-
-            if (ovs_fan == NULL) {
-                ovs_fan = ovsrec_fan_insert(txn);
-            }
-
-            ovsrec_fan_set_name(ovs_fan, fan_name);
-            ovsrec_fan_set_status(ovs_fan,
-                fan_status_enum_to_string(FAND_STATUS_UNINITIALIZED));
-            /* OPS_TODO: these have to be set, but "f2b" and "normal"
-               may not be the right values for defaults. */
-            ovsrec_fan_set_direction(ovs_fan, "f2b");
-            ovsrec_fan_set_speed(ovs_fan, fan_speed_enum_to_string(FAND_SPEED_NORMAL));
-
-            fan_array[total_fan_idx++] = ovs_fan;
+        asprintf(&fan_name, "%s-%s", ovsrec_subsys->name, fan_dev_name);
+        new_fan = fan_class->fand_fan_alloc();
+        asprintf(&new_fan->name, "%s", fan_dev_name);
+        new_fan->subsystem = result;
+        new_fan->class = fan_class;
+        rc = fan_class->fand_fan_construct(new_fan);
+        if (rc) {
+            VLOG_ERR("Failed constructing fan %s subsystem %s",
+                     new_fan->name,
+                     result->name);
+            free(new_fan->name);
+            fan_class->fand_fan_dealloc(new_fan);
+            free(fan_name);
         }
+
+        shash_add(&result->subsystem_fans, fan_name, (void *)new_fan);
+        shash_add(&fan_data, fan_name, (void *)new_fan);
+
+        /* look for existing Fan rows */
+        ovs_fan = lookup_fan(fan_name);
+
+        if (ovs_fan == NULL) {
+            ovs_fan = ovsrec_fan_insert(txn);
+        }
+
+        ovsrec_fan_set_name(ovs_fan, fan_name);
+        ovsrec_fan_set_status(ovs_fan,
+                fan_status_enum_to_string(FAND_STATUS_UNINITIALIZED));
+        /* OPS_TODO: these have to be set, but "f2b" and "normal"
+           may not be the right values for defaults. */
+        ovsrec_fan_set_direction(ovs_fan, "f2b");
+        ovsrec_fan_set_speed(ovs_fan, fan_speed_enum_to_string(FAND_SPEED_NORMAL));
+
+        if (fan_class->fand_speed_set(new_fan, result->speed)) {
+            VLOG_ERR("Failed setting speed subsystem %s fan %s",
+                     result->name,
+                     new_fan->name);
+        }
+
+        fan_array[total_fan_idx++] = ovs_fan;
+        free(fan_name);
     }
 
     ovsrec_subsystem_set_fans(ovsrec_subsys, fan_array, total_fans);
     ovsdb_idl_txn_commit_block(txn);
     ovsdb_idl_txn_destroy(txn);
     free(fan_array);
+    sset_destroy(&fan_set);
 
-    fand_set_fanspeed(result);
+    result->valid = true;
 
     return(result);
 }
@@ -334,17 +302,16 @@ fand_remove_unmarked_subsystems(void)
                 shash_delete(&fan_data, global_node);
                 /* delete the subsystem entry */
                 shash_delete(&subsystem->subsystem_fans, fan_node);
+                fan->class->fand_fan_destruct(fan);
                 /* free the allocated data */
                 free(fan->name);
-                free(fan);
+                fan->class->fand_fan_dealloc(fan);
             }
+            subsystem->class->fand_subsystem_destruct(subsystem);
             free(subsystem->name);
-            free(subsystem);
+            subsystem->class->fand_subsystem_dealloc(subsystem);
 
             shash_delete(&subsystem_data, node);
-
-            /* OPS_TODO: need to remove subsystem yaml data
-                           verify that ovsdb has deleted the fans (automatic) */
         }
     }
 }
@@ -355,11 +322,14 @@ fand_init(const char *remote)
 {
     int retval = 0;
 
+    if (fand_plugins_load()) {
+        VLOG_ERR("Failed loading platform support plugin.");
+    }
+
+    fand_plugins_init();
+
     /* initialize subsystems */
     init_subsystems();
-
-    /* initialize the yaml handle */
-    yaml_handle = yaml_new_config_handle();
 
     idl = ovsdb_idl_create(remote, &ovsrec_idl_class, false, true);
     idl_seqno = ovsdb_idl_get_seqno(idl);
@@ -417,6 +387,8 @@ static void
 fand_exit(void)
 {
     ovsdb_idl_destroy(idl);
+    fand_plugins_deinit();
+    fand_plugins_unload();
 }
 
 static void
@@ -437,8 +409,23 @@ fand_read_status(struct ovsdb_idl *idl)
             struct locl_fan *fan;
             fan = (struct locl_fan *)fan_node->data;
             fan->speed = subsystem->speed;
-            fand_read_fan_status(fan);
-            VLOG_DBG("fan %s rpm set to %d\n", fan->name, fan->rpm);
+            if (fan->class->fand_status_get(fan, &fan->status)) {
+                VLOG_ERR("Failed reading fan status subsystem %s fan %s",
+                         subsystem->name,
+                         fan->name);
+            }
+            if (fan->class->fand_direction_get &&
+                fan->class->fand_direction_get(fan, &fan->direction)) {
+                VLOG_ERR("Failed reading fan direction subsystem %s fan %s",
+                         subsystem->name,
+                         fan->name);
+            }
+            if (fan->class->fand_rpm_get &&
+                fan->class->fand_rpm_get(fan, &fan->rpm)) {
+                VLOG_ERR("Failed reading fan rpm subsystem %s fan %s",
+                         subsystem->name,
+                         fan->name);
+            }
         }
     }
 
@@ -461,8 +448,9 @@ fand_read_status(struct ovsdb_idl *idl)
             ovsrec_fan_set_speed(db_fan, speed);
             change = true;
         }
-        if (strcmp(db_fan->direction, fan->direction) != 0) {
-            ovsrec_fan_set_direction(db_fan, fan->direction);
+        const char *direction = fan_direction_enum_to_string(fan->direction);
+        if (strcmp(db_fan->direction, direction) != 0) {
+            ovsrec_fan_set_direction(db_fan, direction);
             change = true;
         }
         if (db_fan->rpm == NULL || db_fan->rpm[0] != fan->rpm) {
@@ -519,6 +507,8 @@ fand_reconfigure(struct ovsdb_idl *idl)
         struct locl_subsystem *subsystem;
         size_t idx;
         enum fanspeed highest = FAND_SPEED_SLOW;
+        struct locl_fan *fan = NULL;
+        const struct shash_node *fan_node = NULL;
 
         subsystem = get_subsystem(cfg);
 
@@ -538,6 +528,7 @@ fand_reconfigure(struct ovsdb_idl *idl)
         }
         /* record that as the current speed by sensor */
         subsystem->fan_speed = highest;
+        subsystem->speed = subsystem->fan_speed;
 
         /* but also check to see if we have an override value */
         override = smap_get(&cfg->other_config, "fan_speed_override");
@@ -546,7 +537,20 @@ fand_reconfigure(struct ovsdb_idl *idl)
             subsystem->fan_speed_override = override_value;
         }
 
-        fand_set_fanspeed(subsystem);
+        /* use override if it exists, unless the sensors think the speed should
+         * be "max" (potential overtemp situation). */
+        if (override_value != FAND_SPEED_NONE && subsystem->fan_speed != FAND_SPEED_MAX) {
+            subsystem->speed = override_value;
+        }
+
+        SHASH_FOR_EACH(fan_node, &subsystem->subsystem_fans) {
+            fan = (struct locl_fan *)fan_node->data;
+            if (fan->class->fand_speed_set(fan, subsystem->speed)) {
+                VLOG_ERR("Failed setting speed subsystem %s fan %s",
+                         subsystem->name,
+                         fan->name);
+            }
+        }
 
         /* "mark" the subsystem, to indicate that it is still present */
         subsystem->marked = true;
@@ -622,7 +626,7 @@ fand_unixctl_dump(struct unixctl_conn *conn, int argc OVS_UNUSED,
             ds_put_format(&ds, "        Name: %s\n", fan->name);
             ds_put_format(&ds, "            rpm: %d\n", fan->rpm);
             ds_put_format(&ds, "            direction: %s\n",
-                          fan->direction);
+                          fan_direction_enum_to_string(fan->direction));
             ds_put_format(&ds, "            status: %s\n",
                           fan_status_enum_to_string(fan->status));
         }
@@ -670,9 +674,11 @@ main(int argc, char *argv[])
     exiting = false;
     while (!exiting) {
         fand_run();
+        fand_plugins_run();
         unixctl_server_run(unixctl);
 
         fand_wait();
+        fand_plugins_wait();
         unixctl_server_wait(unixctl);
         if (exiting) {
             poll_immediate_wake();

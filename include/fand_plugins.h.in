@@ -1,0 +1,60 @@
+#ifndef _FAND_PLUGINS_H_
+#define _FAND_PLUGINS_H_
+
+#define PLATFORM_PLUGINS_PATH "@LIBDIR@/platform/plugins"
+#define PLATFORM_TYPE_STR "@PLATFORM_TYPE_STR@"
+
+/**
+ * Initialize ops-fand platform support plugin. Must be implemented in plugin.
+ */
+void fand_plugins_init(void);
+
+/**
+ * Deinitialize ops-fand platform support plugin. Must be implemented in
+ * plugin.
+ */
+void fand_plugins_deinit(void);
+
+/**
+ * Plugins run function. Must be implemented in plugin.
+ */
+void fand_plugins_run(void);
+
+/**
+ * Plugins wait function. Must be implemented in plugin.
+ */
+void fand_plugins_wait(void);
+
+/**
+ * Get fand subsystem class.
+ *
+ * @param[in] platform_type - string containing type of the platform.
+ *
+ * @return pointer to subsystem class.
+ * @return NULL if no plugin for specified platform was loaded
+ */
+const struct fand_subsystem_class *fand_subsystem_class_get(const char *platform_type);
+
+/**
+ * Get fand fan class.
+ *
+ * @param[in] platform_type - string containing type of the platform.
+ *
+ * @return pointer to fan class.
+ * @return NULL if no plugin for specified platform was loaded
+ */
+const struct fand_fan_class *fand_fan_class_get(const char *platform_type);
+
+/**
+ * Loads platform plugin. Initializes callbacks from plugin.
+ *
+ * @return 0 on success, non-zero value on failure.
+ */
+int fand_plugins_load(void);
+
+/**
+ * Unload plugin - deinitialize symbols by destroing handle.
+ */
+void fand_plugins_unload(void);
+
+#endif /* _FAND_PLUGINS_H_ */
