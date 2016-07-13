@@ -451,11 +451,11 @@ fand_read_status(struct ovsdb_idl *idl)
         fan_node = shash_find(&fan_data, db_fan->name);
         fan = (struct locl_fan *)fan_node->data;
 
-        const char *status = fan_status_enum_to_string(fan->status);
-        if (strcmp(db_fan->status, status) != 0) {
-            ovsrec_fan_set_status(db_fan, status);
+        if(fan_status_string_to_enum(db_fan->status) != (fan->status)) {
+            ovsrec_fan_set_status(db_fan, fan_status_enum_to_string(fan->status));
             change = true;
         }
+
         const char *speed = fan_speed_enum_to_string(fan->speed);
         if (strcmp(db_fan->speed, speed) != 0) {
             ovsrec_fan_set_speed(db_fan, speed);
