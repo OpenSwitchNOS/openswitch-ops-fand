@@ -518,7 +518,7 @@ fand_reconfigure(struct ovsdb_idl *idl)
         enum fanspeed override_value;
         struct locl_subsystem *subsystem;
         size_t idx;
-        enum fanspeed highest = FAND_SPEED_SLOW;
+        enum fanspeed lowest = FAND_SPEED_MAX;
 
         subsystem = get_subsystem(cfg);
 
@@ -532,12 +532,12 @@ fand_reconfigure(struct ovsdb_idl *idl)
             struct ovsrec_temp_sensor *sensor = cfg->temp_sensors[idx];
             enum fanspeed speed = fan_speed_string_to_enum(sensor->fan_state);
 
-            if (speed > highest) {
-                highest = speed;
+            if (speed < lowest) {
+                lowest = speed;
             }
         }
         /* record that as the current speed by sensor */
-        subsystem->fan_speed = highest;
+        subsystem->fan_speed = lowest;
 
         /* but also check to see if we have an override value */
         override = smap_get(&cfg->other_config, "fan_speed_override");

@@ -64,13 +64,6 @@ fand_set_fanspeed(struct locl_subsystem *subsystem)
         return;
     }
 
-    reg_op = fan_info->fan_speed_control;
-
-    if (reg_op == NULL) {
-        VLOG_DBG("subsystem %s has no fan speed control", subsystem->name);
-        return;
-    }
-
     /* translate the speed */
     switch (speed) {
         case FAND_SPEED_NORMAL:
@@ -121,6 +114,15 @@ fand_set_fanspeed(struct locl_subsystem *subsystem)
             break;
     }
 
+    if (fan_info->fan_speed_control_type == SINGLE)
+    {
+    reg_op = fan_info->fan_speed_control;
+
+    if (reg_op == NULL) {
+        VLOG_DBG("subsystem %s has no fan speed control", subsystem->name);
+        return;
+    }
+
     VLOG_DBG("subsystem %s: executing write operation to device %s",
         subsystem->name,
         reg_op->device);
@@ -133,6 +135,38 @@ fand_set_fanspeed(struct locl_subsystem *subsystem)
             subsystem->name,
             rc);
         return;
+    }
+    }
+    else
+    {
+    for (int idx = 0; idx < fan_info->number_fan_frus; idx++)
+    {
+    const YamlFanFru *fan_fru = yaml_get_fan_fru(yaml_handle, subsystem->name, idx);
+    for (int fan_idx = 0; fan_fru->fans[fan_idx] != NULL; fan_idx++)
+    {
+    const YamlFan *fan = fan_fru->fans[fan_idx];
+    reg_op = fan->fan_speed_pwm;
+
+    if (reg_op == NULL) {
+        VLOG_DBG("subsystem %s has no fan speed control", subsystem->name);
+        return;
+    }
+
+    VLOG_DBG("subsystem %s: executing write operation to device %s",
+        subsystem->name,
+        reg_op->device);
+
+    dword = hw_speed_val;
+    rc = i2c_reg_write(yaml_handle, subsystem->name, reg_op, dword);
+
+    if (rc != 0) {
+        VLOG_WARN("subsystem %s: unable to set fan speed control register (%d)",
+            subsystem->name,
+            rc);
+        return;
+    }
+    }
+    }
     }
 }
 
@@ -279,8 +313,18 @@ fand_read_direction(const char *subsystem_name, const YamlFan *fan)
 void
 fand_read_fan_status(struct locl_fan *fan)
 {
+    const YamlFanInfo *fan_info = NULL;
+    fan_info = yaml_get_fan_info(yaml_handle, fan->subsystem->name);
+
     fan->rpm = fand_read_rpm(fan->subsystem->name, fan->yaml_fan);
-    fan->rpm *= fan->subsystem->multiplier;
+    if (fan_info->fan_speed_control_type == SINGLE)
+    {
+        fan->rpm = fan->subsystem->multiplier * fan->rpm;
+    }
+    else
+    {
+        fan->rpm = fan->subsystem->multiplier / fan->rpm / 16;
+    }
 
     fan->status = fand_read_status(fan->subsystem->name, fan->yaml_fan);
     fan->direction = fand_read_direction(fan->subsystem->name, fan->yaml_fan);
