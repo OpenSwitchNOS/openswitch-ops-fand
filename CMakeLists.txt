@@ -31,8 +31,11 @@ include_directories (${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR}/${INCL_DIR}
                      ${OVSCOMMON_INCLUDE_DIRS}
 )
 
+configure_file(${CMAKE_SOURCE_DIR}/${INCL_DIR}/fand_plugins.h.in
+               ${CMAKE_SOURCE_DIR}/${INCL_DIR}/fand_plugins.h)
+
 # Source files to build ops-fand
-set (SOURCES ${SRC_DIR}/fand.c ${SRC_DIR}/physfan.c ${SRC_DIR}/fanspeed.c
+set (SOURCES ${SRC_DIR}/fand.c ${SRC_DIR}/fand_plugins.c ${SRC_DIR}/fanspeed.c
              ${SRC_DIR}/fanstatus.c ${SRC_DIR}/fandirection.c)
 
 # Rules to build ops-fand
@@ -44,6 +47,8 @@ target_link_libraries (${FAND} ${CONFIG_YAML_LIBRARIES}
 
 # Build ops-ledd cli shared libraries.
 add_subdirectory(src/cli)
+add_subdirectory(plugins/sysfs)
+add_subdirectory(plugins/i2c)
 
 # Rules to install ops-fand binary in rootfs
 install(TARGETS ${FAND}

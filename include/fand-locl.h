@@ -114,30 +114,44 @@
 #include "shash.h"
 #include "fanspeed.h"
 #include "fanstatus.h"
-#include "config-yaml.h"
 
 /* define a local structure to hold subsystem-related data,
    including the fan speed override value */
 struct locl_subsystem {
     char *name;
+    const struct fand_subsystem_class *class;
     bool marked;
     bool valid;
     struct locl_subsystem *parent_subsystem;
     enum fanspeed fan_speed;      /* from tempd results */
     enum fanspeed fan_speed_override; /* as configured by user */
     enum fanspeed speed;          /* result of fan_speed, fan_speed_override */
-    int multiplier;               /* from fans.yaml info */
     struct shash subsystem_fans;  /* struct locl_fan */
+    struct shash subsystem_frus;  /* struct locl_fru */
+    const YamlFanInfo *info;      /* common info per subsystem */
+    YamlConfigHandle yaml_handle; /* global yaml config handle */
+
 };
 
 struct locl_fan {
     char *name;
+    const struct fand_fan_class *class;
     struct locl_subsystem *subsystem;
     const YamlFan *yaml_fan;
     enum fanspeed speed;
-    const char *direction;
-    int rpm;
+    enum fandirection direction;
+    uint32_t rpm;
     enum fanstatus status;
+    struct locl_fru *fru;
+};
+
+struct locl_fru {
+    char *name;
+    const struct fand_fru_class *class;
+    const YamlFanFru *yaml_fru;
+    struct locl_subsystem *subsystem;
+    bool present;                       /* FRU is plugged */
+    bool fan_fault;                     /* one of fans is in fault state */
 };
 
 #endif /* _FAND_LOCL_H_ */

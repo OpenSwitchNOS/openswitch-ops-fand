@@ -63,6 +63,7 @@ The following cols are read by ops-fand
 ### Main loop
 Main loop pseudo-code
 ```
+  load platform support plugins
   initialize OVS IDL
   initialize appctl interface
   while not exiting
@@ -72,6 +73,7 @@ Main loop pseudo-code
         update status
         set fan direction
         set fan speed
+        update leds
   check for appctl
   wait for IDL or appctl input
 ```
@@ -82,28 +84,17 @@ Main loop pseudo-code
   | fand.c |        +---------------------+
   |        |        | config-yaml library |    +----------------------+
   |        +------->+                     +--->+ hw description files |
-  |        |        |                     |    +----------------------+
-  |        |        |                     |
-  |        |        |            +--------+
-  |        +-------------------> | i2c    |    +----------+
-  |        |        |            |        +--->+ fan FRUs |
-  |        |        +------------+--------+    +----------+
+  |        |        +---------------------+    +----------------------+
   |        |
-  |        |       +-------------+
-  |        +-------+ fanstatus.c |
-  |        |       +-------------+
+  |        |        +---------------------+    +----------+
+  |        +-------+> tempd-plugins.c     |    | platform |    +----------+
+  |        |        |                     +--->+ plugin   +--->| fan FRUs |
+  |        |        +------------+--------+    +----------+    +----------+
   |        |
   |        |       +-------+
   |        +------>+ OVSDB |
   |        |       +-------+
   |        |
-  |        |       +-----------+     +----------------------+
-  |        |       | physfan.c +---->+ fandirection.c       |
-  |        |       |           |     +----------------------+
-  |        +------>+           |
-  |        |       |           |     +-----------------------+
-  |        |       |           +---->+ fanspeed.c            |
-  |        |       +-----------+     +-----------------------+
   +--------+
 ```
 
